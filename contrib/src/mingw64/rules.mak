@@ -8,6 +8,14 @@ MINGW64_URL := $(SF)/mingw-w64/mingw-w64/mingw-w64-release/mingw-w64-v$(MINGW64_
 ifdef HAVE_WIN32
 PKGS += winpthreads
 
+# Hosted CI uses the MinGW POSIX compiler and its matching system pthread
+# runtime. winpthreads 14 needs newer MinGW CRT timespec definitions than
+# those shipped with Ubuntu 22.04's cross compiler. Opt in explicitly so
+# local VLC builds keep the upstream contrib behavior.
+ifdef VLC_USE_SYSTEM_WINPTHREADS
+PKGS_FOUND += winpthreads
+endif
+
 ifndef HAVE_VISUALSTUDIO
 ifdef HAVE_WINSTORE
 PKGS += alloweduwp

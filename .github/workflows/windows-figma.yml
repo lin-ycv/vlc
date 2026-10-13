@@ -14,6 +14,10 @@ on:
           - i686
         default: x86_64
 
+concurrency:
+  group: windows-vlc-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -25,6 +29,7 @@ jobs:
     env:
       ARCH: ${{ inputs.architecture || 'x86_64' }}
       MAKEFLAGS: -j2
+      VLC_USE_SYSTEM_WINPTHREADS: "1"
     steps:
       - name: Check out VLC 3.0.24 redesign
         uses: actions/checkout@v4
@@ -37,12 +42,28 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             autoconf automake autopoint bison build-essential cmake flex \
             gettext git gperf libarchive-tools libtool mingw-w64 nasm \
+            gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
+            gcc-mingw-w64-i686-posix g++-mingw-w64-i686-posix \
             ninja-build pkg-config python3 python3-setuptools \
             ragel subversion unzip wget yasm zip
+      - name: Verify matching MinGW pthread runtime
+        shell: bash
+        run: |
+          set -eu
+          cc="${ARCH}-w64-mingw32-gcc-posix"
+          cxx="${ARCH}-w64-mingw32-g++-posix"
+          command -v "$cc"
+          command -v "$cxx"
+          library="$("$cc" -print-file-name=libwinpthread.a)"
+          test "$library" != libwinpthread.a
+          test -f "$library"
+          echo "Using system winpthreads: $library"
       - name: Build VLC for Windows
         shell: bash
         run: |
           set -o pipefail
+          export CC="${ARCH}-w64-mingw32-gcc-posix"
+          export CXX="${ARCH}-w64-mingw32-g++-posix"
           bash extras/package/win32/build.sh -a "$ARCH" -p -i u 2>&1 | tee windows-build.log
       - name: Save build diagnostic log
         if: always()

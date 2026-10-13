@@ -134,7 +134,8 @@ fi
 SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
 VLC_ROOT_PATH="$( cd "${SCRIPT_PATH}/../../.." ; pwd -P )"
 
-JOBS=`getconf _NPROCESSORS_ONLN 2>&1`
+# Respect a CI job limit; default to the host's available processors.
+JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>&1)}
 TRIPLET=$ARCH-w64-mingw32
 
 # Check if compiling with clang

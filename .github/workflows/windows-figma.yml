@@ -9,90 +9,107 @@ on:
       architecture:
         description: Windows target
         type: choice
-        options:
-          - x86_64
-          - i686
+        options: [x86_64, i686]
         default: x86_64
-
-concurrency:
-  group: windows-vlc-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: windows-vlc-${{ github.ref }}-${{ inputs.architecture || 'x86_64' }}
+  cancel-in-progress: true
+
 jobs:
   windows-cross-build:
-    name: Windows ${{ inputs.architecture || 'x86_64' }} (MinGW)
+    name: Windows ${{ inputs.architecture || 'x86_64' }} (VideoLAN toolchain)
     runs-on: ubuntu-22.04
+    container:
+      image: ${{ inputs.architecture == 'i686' && 'registry.videolan.org/vlc-debian-win32-3.0:20260820114402' || 'registry.videolan.org/vlc-debian-win64-3.0:20260820114402' }}
     timeout-minutes: 300
     env:
       ARCH: ${{ inputs.architecture || 'x86_64' }}
-      # Do not set MAKEFLAGS here: its jobserver arguments can confuse
-      # nested Ninja invocations in VLC's contrib builds.
-      VLC_USE_SYSTEM_WINPTHREADS: "1"
+      JOBS: '2'
+      MESON_BUILD: '-j 2'
     steps:
       - name: Check out VLC 3.0.24 redesign
         uses: actions/checkout@v4
         with:
-          submodules: false
           fetch-depth: 1
-      - name: Install Windows cross-compilation prerequisites
-        run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            autoconf automake autopoint bison build-essential cmake flex \
-            gettext git gperf libarchive-tools libtool mingw-w64 nasm \
-            gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
-            gcc-mingw-w64-i686-posix g++-mingw-w64-i686-posix \
-            ninja-build pkg-config python3 python3-setuptools \
-            ragel subversion unzip wget yasm zip
-      - name: Verify matching MinGW pthread runtime
+          submodules: false
+      - name: Verify official VideoLAN cross-toolchain
         shell: bash
         run: |
-          set -eu
-          cc="${ARCH}-w64-mingw32-gcc-posix"
-          cxx="${ARCH}-w64-mingw32-g++-posix"
-          command -v "$cc"
-          command -v "$cxx"
-          library="$("$cc" -print-file-name=libwinpthread.a)"
-          test "$library" != libwinpthread.a
-          test -f "$library"
-          echo "Using system winpthreads: $library"
-      - name: Build VLC for Windows
+          set -euo pipefail
+          command -v "${ARCH}-w64-mingw32-gcc"
+          command -v "${ARCH}-w64-mingw32-g++"
+          command -v make
+          command -v git
+          command -v curl
+          "${ARCH}-w64-mingw32-gcc" --version | sed -n '1p'
+          "${ARCH}-w64-mingw32-g++" --version | sed -n '1p'
+          git rev-parse HEAD
+          test -f contrib/src/qt/rules.mak
+          test -f extras/package/win32/build.sh
+      - name: Check for matching official VLC 3.0 contribs
+        id: contribs
         shell: bash
         run: |
-          set -o pipefail
-          # Build VLC's host tools with the native Linux compiler, but
-          # resolve VLC's target triplet compiler to the MinGW POSIX variant.
-          # Do not export CC/CXX: extras/tools uses them for host binaries.
-          unset CC CXX
-          toolchain="$RUNNER_TEMP/vlc-mingw-posix"
-          mkdir -p "$toolchain"
-          ln -s "$(command -v "${ARCH}-w64-mingw32-gcc-posix")" \
-            "$toolchain/${ARCH}-w64-mingw32-gcc"
-          ln -s "$(command -v "${ARCH}-w64-mingw32-g++-posix")" \
-            "$toolchain/${ARCH}-w64-mingw32-g++"
-          export PATH="$toolchain:$PATH"
-          echo "Native compiler: $(command -v gcc)"
-          echo "Cross compiler: $(command -v "${ARCH}-w64-mingw32-gcc")"
-          bash extras/package/win32/build.sh -a "$ARCH" -p -i u 2>&1 | tee windows-build.log
-      - name: Save build diagnostic log
+          set -euo pipefail
+          # Last upstream 3.0.24 change affecting contribs, as determined from
+          # the four paths in extras/ci/get-contrib-sha.sh for a win64 build.
+          contrib_sha=910cc9cada6080dd777fbafb2ebdd0c24f702c30
+          target=win64
+          if [[ "$ARCH" == i686 ]]; then target=win32; fi
+          url="https://artifacts.videolan.org/vlc-3.0/${target}/vlc-contrib-${ARCH}-w64-mingw32-${contrib_sha}.tar.zst"
+          if curl --silent --show-error --fail --location --head --max-time 30 "$url" >/dev/null; then
+            echo "Found matching official contrib archive"
+            printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
+          else
+            echo 'No exact matching prebuilt contrib archive; will compile contribs from source.'
+          fi
+      - name: Build and package Windows VLC
+        shell: bash
+        env:
+          PREBUILT_URL: ${{ steps.contribs.outputs.url }}
+        run: |
+          set -euo pipefail
+          args=(-r -a "$ARCH" -i u)
+          if [[ -n "$PREBUILT_URL" ]]; then
+            export VLC_PREBUILT_CONTRIBS_URL="$PREBUILT_URL"
+            args+=(-p)
+          fi
+          bash extras/package/win32/build.sh "${args[@]}" 2>&1 | tee windows-build.log
+      - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vlc-windows-${{ env.ARCH }}-build-log
+          name: windows-${{ env.ARCH }}-build-log
           path: windows-build.log
           if-no-files-found: ignore
           retention-days: 14
-      - name: Upload unsigned Windows packages
+      - name: Verify Windows package outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          directory=win64
+          if [[ "$ARCH" == i686 ]]; then directory=win32; fi
+          test -d "$directory"
+          echo 'Windows packages:'
+          find "$directory" -maxdepth 1 -type f \( -name 'vlc-*.7z' -o -name 'vlc-*.exe' -o -name 'vlc-*.msi' -o -name 'vlc-*.zip' \) -print
+          test -n "$(find "$directory" -maxdepth 1 -type f \( -name 'vlc-*.7z' -o -name 'vlc-*.exe' -o -name 'vlc-*.msi' -o -name 'vlc-*.zip' \) -print -quit)"
+      - name: Upload Windows binaries
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: vlc-windows-${{ env.ARCH }}-redesign
+          name: vlc-${{ env.ARCH }}-windows-redesign
           path: |
-            vlc-*.zip
-            vlc-*.7z
-            vlc-*.exe
-          if-no-files-found: warn
+            win64/vlc-*.7z
+            win64/vlc-*.exe
+            win64/vlc-*.msi
+            win64/vlc-*.zip
+            win32/vlc-*.7z
+            win32/vlc-*.exe
+            win32/vlc-*.msi
+            win32/vlc-*.zip
+          if-no-files-found: error
           retention-days: 14

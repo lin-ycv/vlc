@@ -62,8 +62,19 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          export CC="${ARCH}-w64-mingw32-gcc-posix"
-          export CXX="${ARCH}-w64-mingw32-g++-posix"
+          # Build VLC's host tools with the native Linux compiler, but
+          # resolve VLC's target triplet compiler to the MinGW POSIX variant.
+          # Do not export CC/CXX: extras/tools uses them for host binaries.
+          unset CC CXX
+          toolchain="$RUNNER_TEMP/vlc-mingw-posix"
+          mkdir -p "$toolchain"
+          ln -s "$(command -v "${ARCH}-w64-mingw32-gcc-posix")" \
+            "$toolchain/${ARCH}-w64-mingw32-gcc"
+          ln -s "$(command -v "${ARCH}-w64-mingw32-g++-posix")" \
+            "$toolchain/${ARCH}-w64-mingw32-g++"
+          export PATH="$toolchain:$PATH"
+          echo "Native compiler: $(command -v gcc)"
+          echo "Cross compiler: $(command -v "${ARCH}-w64-mingw32-gcc")"
           bash extras/package/win32/build.sh -a "$ARCH" -p -i u 2>&1 | tee windows-build.log
       - name: Save build diagnostic log
         if: always()

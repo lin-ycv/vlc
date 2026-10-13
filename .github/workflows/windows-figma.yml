@@ -1,0 +1,65 @@
+name: Windows VLC 3.0.24 redesign build
+
+on:
+  push:
+    branches:
+      - windows-figma-vlc-3.0.24
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: Windows target
+        type: choice
+        options:
+          - x86_64
+          - i686
+        default: x86_64
+
+permissions:
+  contents: read
+
+jobs:
+  windows-cross-build:
+    name: Windows ${{ inputs.architecture || 'x86_64' }} (MinGW)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 300
+    env:
+      ARCH: ${{ inputs.architecture || 'x86_64' }}
+      MAKEFLAGS: -j2
+    steps:
+      - name: Check out VLC 3.0.24 redesign
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+      - name: Install Windows cross-compilation prerequisites
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            autoconf automake autopoint bison build-essential cmake flex \
+            gettext git gperf libarchive-tools libtool mingw-w64 nasm \
+            ninja-build pkg-config python3 python3-setuptools \
+            ragel subversion unzip wget yasm zip
+      - name: Build VLC for Windows
+        shell: bash
+        run: |
+          set -o pipefail
+          bash extras/package/win32/build.sh -a "$ARCH" -p -i u 2>&1 | tee windows-build.log
+      - name: Save build diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vlc-windows-${{ env.ARCH }}-build-log
+          path: windows-build.log
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload unsigned Windows packages
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vlc-windows-${{ env.ARCH }}-redesign
+          path: |
+            vlc-*.zip
+            vlc-*.7z
+            vlc-*.exe
+          if-no-files-found: warn
+          retention-days: 14

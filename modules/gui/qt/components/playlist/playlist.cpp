@@ -50,7 +50,13 @@ PlaylistWidget::PlaylistWidget( intf_thread_t *_p_i, QWidget *_par )
                : QWidget( _par ), p_intf ( _p_i )
 {
 
+#ifdef Q_OS_WIN
+    // Figma redesign: the media sidebar is a first-class navigation surface.
+    // Keep the existing selector and playlist model (and their behavior).
+    setContentsMargins( 0, 0, 0, 0 );
+#else
     setContentsMargins( 0, 3, 0, 3 );
+#endif
 
     QGridLayout *layout = new QGridLayout( this );
     layout->setContentsMargins( 0, 0, 0, 0 ); layout->setSpacing( 0 );
@@ -144,12 +150,21 @@ PlaylistWidget::PlaylistWidget( intf_thread_t *_p_i, QWidget *_par )
     split->addWidget( mainView );
 
     QList<int> sizeList;
-    sizeList << 180 << 420 ;
+#ifdef Q_OS_WIN
+    sizeList << 320 << 800;
+#else
+    sizeList << 180 << 420;
+#endif
     split->setSizes( sizeList );
     split->setStretchFactor( 0, 0 );
     split->setStretchFactor( 1, 3 );
     split->setCollapsible( 1, false );
+#ifdef Q_OS_WIN
+    leftSplitter->setMinimumWidth( 240 );
+    leftSplitter->setMaximumWidth( 427 );
+#else
     leftSplitter->setMaximumWidth( 250 );
+#endif
 
     /* In case we want to keep the splitter information */
     // components shall never write there setting to a fixed location, may infer

@@ -681,9 +681,72 @@ static void *ThreadPlatform( void *obj, char *platform_name )
     if (!s_style.isEmpty())
         QApplication::setStyle( s_style );
 
-    // Apply dark palette only if dark palette is enabled
+    // On Windows, give the classic Qt Widgets interface the VLC redesign's
+    // dark visual language. Playback, embedded video, and the other platforms
+    // keep their existing implementation.
+#ifdef Q_OS_WIN
+    applyDarkPalette();
+    app.setStyleSheet( QString::fromLatin1(
+        "QMainWindow, QDialog { background-color: #191919; color: #eeeeee; }"
+        "QMenuBar { background-color: #191919; color: #eeeeee; spacing: 6px; }"
+        "QMenuBar::item { padding: 7px 11px; background: transparent; }"
+        "QMenuBar::item:selected { background: #333333; border-radius: 5px; }"
+        "QMenu { background-color: #242424; color: #eeeeee;"
+        " border: 1px solid #393939; padding: 6px; }"
+        "QMenu::item { padding: 6px 22px 6px 20px; border-radius: 4px; }"
+        "QMenu::item:selected { background-color: #393939; }"
+        "QToolBar { background-color: #191919; border: 0px;"
+        " spacing: 7px; padding: 6px; }"
+        "QDockWidget { color: #eeeeee; }"
+        "QDockWidget::title { background: #242424; padding: 7px; }"
+        "QPushButton, QToolButton { color: #ededed; background: #292929;"
+        " border: 1px solid #353535; border-radius: 6px;"
+        " padding: 5px 9px; min-height: 22px; }"
+        "QPushButton:hover, QToolButton:hover { background: #383838; }"
+        "QPushButton:pressed, QToolButton:pressed { background: #494949; }"
+        "QPushButton:checked, QToolButton:checked {"
+        " background: #e88942; color: #111111; border-color: #e88942; }"
+        "QPushButton:disabled, QToolButton:disabled {"
+        " color: #777777; background: #242424; }"
+        "QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox {"
+        " background: #242424; color: #eeeeee; border: 1px solid #424242;"
+        " border-radius: 6px; padding: 5px 7px; selection-background-color:"
+        " #e88942; selection-color: #111111; }"
+        "QLineEdit:focus, QTextEdit:focus, QComboBox:focus {"
+        " border: 1px solid #e88942; }"
+        "QComboBox QAbstractItemView { background: #242424;"
+        " color: #eeeeee; selection-background-color: #484848; }"
+        "QTreeView, QListView, QTableView { background: #191919;"
+        " alternate-background-color: #232323; color: #eeeeee;"
+        " border: 0px; outline: 0px; }"
+        "QTreeView::item, QListView::item, QTableView::item {"
+        " padding: 5px; }"
+        "QTreeView::item:selected, QListView::item:selected,"
+        " QTableView::item:selected { background: #393939;"
+        " color: #ffffff; }"
+        "QHeaderView::section { background: #262626; color: #bbbbbb;"
+        " border: 0px; padding: 7px; }"
+        "QTabWidget::pane { border: 1px solid #383838; }"
+        "QTabBar::tab { background: #242424; color: #aaaaaa;"
+        " padding: 8px 13px; border: 0px; }"
+        "QTabBar::tab:selected { background: #383838; color: #ffffff; }"
+        "QSlider::groove:horizontal { height: 5px; background: #494949;"
+        " border-radius: 2px; }"
+        "QSlider::sub-page:horizontal { background: #e88942;"
+        " border-radius: 2px; }"
+        "QSlider::handle:horizontal { background: #eeeeee; width: 13px;"
+        " margin: -5px 0; border-radius: 6px; }"
+        "QProgressBar { background: #363636; border: 0px;"
+        " border-radius: 3px; text-align: center; }"
+        "QProgressBar::chunk { background: #e88942; border-radius: 3px; }"
+        "QStatusBar { background: #191919; color: #b5b5b5; }"
+        "QToolTip { background: #2b2b2b; color: #ffffff;"
+        " border: 1px solid #555555; padding: 4px; }"
+    ) );
+#else
     if (isDarkPaletteEnabled(p_intf))
         applyDarkPalette();
+#endif
 
     /* Launch */
     app.exec();

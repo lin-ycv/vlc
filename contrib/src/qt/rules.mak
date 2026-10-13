@@ -82,6 +82,10 @@ QT_CONFIG := -static -opensource -confirm-license -no-pkg-config -system-zlib \
 	-no-qml-debug -no-audio-backend -no-sql-odbc -no-pch \
 	-no-compile-examples -nomake examples -I $(PREFIX)/include
 ifdef HAVE_WIN32
+# Qt 5.6's moc cannot parse newer libstdc++ C++17/concepts headers
+# reliably when cross-building with GCC 10+ (iterator_concepts: ranges).
+# Select the oldest supported language edition for the Qt 5.6 runtime.
+QT_CONFIG += -c++std c++11
 QT_CONFIG += -no-xcb
 endif
 

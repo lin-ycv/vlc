@@ -28,7 +28,8 @@ jobs:
     timeout-minutes: 300
     env:
       ARCH: ${{ inputs.architecture || 'x86_64' }}
-      MAKEFLAGS: -j2
+      # Do not set MAKEFLAGS here: its jobserver arguments can confuse
+      # nested Ninja invocations in VLC's contrib builds.
       VLC_USE_SYSTEM_WINPTHREADS: "1"
     steps:
       - name: Check out VLC 3.0.24 redesign
